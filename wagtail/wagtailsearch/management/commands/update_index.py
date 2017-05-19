@@ -82,7 +82,7 @@ class Command(BaseCommand):
                 for model in models:
                     self.stdout.write('{}: {}.{} '.format(backend_name, model._meta.app_label, model.__name__).ljust(35), ending='')
 
-                    # Add items (1000 at a time)
+                    # Add items (default 1000 at a time)
                     for chunk in self.print_iter_progress(self.queryset_chunks(model.get_indexed_objects().order_by('pk'))):
                         index.add_items(model, chunk)
                         object_count += len(chunk)
@@ -102,6 +102,9 @@ class Command(BaseCommand):
         parser.add_argument(
             '--schema-only', action='store_true', dest='schema_only', default=False,
             help="Prevents loading any data into the index")
+        parser.add_argument(
+            '--chunk-size', action='store', dest='chunk_size', type=int, default=1000,
+            help="Number of items to index at once")
 
     def handle(self, **options):
         # Get list of backends to index
@@ -147,13 +150,14 @@ class Command(BaseCommand):
 
     # Atomic so the count of models doesnt change as it is iterated
     @transaction.atomic
-    def queryset_chunks(self, qs, chunk_size=1000):
+    def queryset_chunks(self, qs, **options):
         """
         Yield a queryset in chunks of at most ``chunk_size``. The chunk yielded
         will be a list, not a queryset. Iterating over the chunks is done in a
         transaction so that the order and count of items in the queryset
         remains stable.
         """
+        chunk_size = options.get('chunk_size', 1000)
         i = 0
         while True:
             items = list(qs[i * chunk_size:][:chunk_size])
